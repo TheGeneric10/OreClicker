@@ -18,6 +18,10 @@ const clampN=(n,f=0)=>Number.isFinite(Number(n))?Number(n):f;
 const fmtI=(n)=>Math.floor(clampN(n,0)).toLocaleString();
 const now=()=>Date.now();
 
+const RTDB_BASE_URL = "https://thegeneric-685b0-default-rtdb.firebaseio.com";
+const RTDB_ROOT = "OreClicker";
+const RTDB_DATA = `${RTDB_ROOT}/data`;
+const RTDB_REF = `${RTDB_BASE_URL}/${RTDB_ROOT}`;
 const RTDB_URL = "https://thegeneric-685b0-default-rtdb.firebaseio.com";
 const RTDB_ROOT = "OreClicker";
 const RTDB_DATA = `${RTDB_ROOT}/data`;
@@ -281,7 +285,7 @@ el.modal.back.addEventListener("click",(e)=>{ if(e.target===el.modal.back) modal
 const firebaseConfig = {
   apiKey: "AIzaSyA375t6p_Zc9Ztfi-RUniqAmjttsjPyy1k",
   authDomain: "thegeneric-685b0.firebaseapp.com",
-  databaseURL: RTDB_URL,
+  databaseURL: RTDB_BASE_URL,
   projectId: "thegeneric-685b0",
   storageBucket: "thegeneric-685b0.firebasestorage.app",
   messagingSenderId: "272113167212",
@@ -1208,6 +1212,40 @@ function mineOre(){
     setSideStatus("Equip a pickaxe or axe");
     return;
   }
+
+  if(eq.def.type==="tool"){
+    const o = nearestOre();
+    if(!o){ setSideStatus("No ore nearby"); return; }
+    const power = eq.def.mine || 1;
+    damageEquipment(eq);
+
+    o.hp -= power;
+    setSideStatus(`Mining ${ITEMS[o.id].name}…`);
+    if(o.hp<=0){
+      const yieldAmt = o.id==="ore_basic"?2 : o.id==="ore_coal"?2 : o.id==="ore_iron"?2 : o.id==="ore_gold"?1 : 1;
+      S.resources[o.id] = (S.resources[o.id]||0) + yieldAmt;
+      addItem(S.inventory, makeItem(o.id, yieldAmt));
+      toast(`+${yieldAmt} ${ITEMS[o.id].name}`);
+      scheduleOreRespawn(o);
+    }
+    invUI.render();
+    renderResources();
+    return;
+  }
+
+  if(eq.def.type==="axe"){
+    const t = nearestTree();
+    if(!t){ setSideStatus("No trees nearby"); return; }
+    const power = eq.def.chop || 1;
+    damageEquipment(eq);
+    t.hp -= power;
+    setSideStatus("Chopping wood…");
+    if(t.hp<=0){
+      const yieldAmt = 2;
+      S.resources.wood = (S.resources.wood||0) + yieldAmt;
+      addItem(S.inventory, makeItem("wood", yieldAmt));
+      toast(`+${yieldAmt} Wood`);
+      scheduleTreeRespawn(t);
 
   if(eq.def.type==="tool"){
     const o = nearestOre();
