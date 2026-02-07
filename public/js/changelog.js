@@ -77,6 +77,7 @@ export const CHANGELOG = [
   ];
   
   export function renderChangelog(rootEl, activeVer = "0.9") {
+  export function renderChangelog(rootEl, activeVer = "0.8") {
     rootEl.innerHTML = `
       <div class="card sharp">
         <div class="cardTitle">Beta List</div>
