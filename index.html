@@ -164,6 +164,7 @@
     <section id="screenGame" class="screen gameScreen">
       <div class="gameWrap">
         <canvas id="gameCanvas"></canvas>
+        <div class="fpsCounter sharp" id="fpsCounter" hidden>FPS: 0</div>
 
         <!-- HUD bottom-left -->
         <div class="hud sharp" id="hud">
@@ -200,6 +201,7 @@
             <div class="sideResRow"><span>Iron</span><b data-bind="ore_iron">0</b></div>
             <div class="sideResRow"><span>Gold</span><b data-bind="ore_gold">0</b></div>
             <div class="sideResRow"><span>Diamond</span><b data-bind="ore_diamond">0</b></div>
+            <div class="sideResRow"><span>Wood</span><b data-bind="wood">0</b></div>
           </div>
 
           <div class="sideSectionTitle">STATUS</div>
@@ -216,6 +218,17 @@
             <div class="smallmuted" id="saveModeText">Guest Mode: no saving</div>
           </div>
         </aside>
+
+        <div class="touchControls" id="touchControls" hidden>
+          <div class="touchPad" id="touchPad">
+            <div class="touchKnob" id="touchKnob"></div>
+          </div>
+          <div class="touchButtons">
+            <button class="btn sharp small primary" id="touchMine" type="button">MINE</button>
+            <button class="btn sharp small" id="touchAttack" type="button">ATTACK</button>
+            <button class="btn sharp small" id="touchUse" type="button">USE</button>
+          </div>
+        </div>
       </div>
     </section>
   </main>

@@ -19,6 +19,8 @@ const fmtI=(n)=>Math.floor(clampN(n,0)).toLocaleString();
 const now=()=>Date.now();
 
 const RTDB_URL = "https://thegeneric-685b0-default-rtdb.firebaseio.com/";
+const RTDB_ROOT = "OreClicker";
+const RTDB_REF = `${RTDB_URL}${RTDB_ROOT}`;
 
 const el={
   screens:{
@@ -31,6 +33,7 @@ const el={
   },
   loadingBar: $("#loadingBar"),
   canvas: $("#gameCanvas"),
+  fpsCounter: $("#fpsCounter"),
 
   whatsNewRoot: $("#whatsNewRoot"),
   btnWhatsNewBack: $("#btnWhatsNewBack"),
@@ -65,6 +68,7 @@ const el={
     ore_iron: $$('[data-bind="ore_iron"]'),
     ore_gold: $$('[data-bind="ore_gold"]'),
     ore_diamond: $$('[data-bind="ore_diamond"]'),
+    wood: $$('[data-bind="wood"]'),
   },
 
   menu:{
@@ -136,6 +140,14 @@ const el={
     more: $("#errorMore"),
     close: $("#errorClose"),
     t: null
+  },
+  touch:{
+    root: $("#touchControls"),
+    pad: $("#touchPad"),
+    knob: $("#touchKnob"),
+    mine: $("#touchMine"),
+    attack: $("#touchAttack"),
+    use: $("#touchUse"),
   }
 };
 
@@ -174,6 +186,7 @@ el.error.close.addEventListener("click",(e)=>{ e.preventDefault(); hideError(); 
 
 /* Modal manager (focus-safe) */
 let paused = false;
+let tabPaused = false;
 let lastFocusEl = null;
 
 const syncPaused = ()=>{
@@ -277,9 +290,12 @@ try{
 }catch{
   // guest still works
 }
+if(db){
+  ensureOreClickerRoot().catch(()=>{});
+}
 
 /* Save model */
-const SAVE_VERSION="0.7";
+const SAVE_VERSION="0.8";
 const LAST_USER_KEY="oreclicker_last_user";
 
 const defaultHotkeys=()=>({
@@ -295,7 +311,7 @@ const defaultState=()=>({
 
   mode:"guest", uid:null, username:null, email:null,
 
-  resources:{ money:0, ore_basic:0, ore_coal:0, ore_iron:0, ore_gold:0, ore_diamond:0 },
+  resources:{ money:0, ore_basic:0, ore_coal:0, ore_iron:0, ore_gold:0, ore_diamond:0, wood:0 },
   inventory: invDefault(),
 
   player:{ x:0, y:0, hp:250, maxHp:250, shield:50, maxShield:50, level:1, exp:0, lastHitAt:0 },
@@ -309,6 +325,8 @@ const defaultState=()=>({
   weekly:{ streak:0, lastClaimAt:0, day:1 },
 
   offline:{ showThresholdMin:30 },
+
+  settings:{ showFps:false },
 
   hotkeys: defaultHotkeys()
 });
@@ -434,6 +452,10 @@ function sanitizeLoadedState(raw){
     base.hotkeys = { ...defaultHotkeys(), ...raw.hotkeys };
   }
 
+  if(raw.settings && typeof raw.settings==="object"){
+    base.settings.showFps = !!raw.settings.showFps;
+  }
+
   // keep save version, but do NOT wipe older data
   base.version = SAVE_VERSION;
   return base;
@@ -441,9 +463,10 @@ function sanitizeLoadedState(raw){
 
 /* RTDB paths */
 const path = {
-  userSave: (uid)=> `OreClicker/users/${uid}/save`,
-  userProfile: (uid)=> `OreClicker/users/${uid}/profile`,
-  usernames: (u)=> `OreClicker/usernames/${String(u||"").toLowerCase()}`
+  root: ()=> RTDB_ROOT,
+  userSave: (uid)=> `${RTDB_ROOT}/users/${uid}/save`,
+  userProfile: (uid)=> `${RTDB_ROOT}/users/${uid}/profile`,
+  usernames: (u)=> `${RTDB_ROOT}/usernames/${String(u||"").toLowerCase()}`
 };
 
 const isPerm = (e)=>{
@@ -458,6 +481,64 @@ async function dbGet(p){
 }
 async function dbSet(p, v){ await set(ref(db, p), v); }
 async function dbUpdate(p, v){ await update(ref(db, p), v); }
+
+async function ensureOreClickerRoot(){
+  if(!db) return;
+  try{
+    const root = await dbGet(path.root());
+    if(!root){
+      await dbSet(path.root(), { meta:{ createdAt: now(), version: SAVE_VERSION } });
+    }
+  }catch(e){
+    if(!isPerm(e)) throw e;
+  }
+}
+
+async function ensureUserRecords(user){
+  if(!db || !user?.uid) return;
+  const uid = user.uid;
+  const email = user.email || null;
+  const username = user.displayName || S.username || null;
+
+  const profilePath = path.userProfile(uid);
+  const savePath = path.userSave(uid);
+
+  let profile = null;
+  let save = null;
+  try{
+    [profile, save] = await Promise.all([dbGet(profilePath), dbGet(savePath)]);
+  }catch(e){
+    if(isPerm(e)) return;
+    throw e;
+  }
+
+  if(!profile){
+    await dbSet(profilePath, { username, email, createdAt: now() });
+  }else{
+    const patch = {};
+    if(username && profile.username !== username) patch.username = username;
+    if(email && profile.email !== email) patch.email = email;
+    if(Object.keys(patch).length) await dbUpdate(profilePath, patch);
+  }
+
+  if(username){
+    try{
+      const existing = await dbGet(path.usernames(username));
+      if(!existing) await dbSet(path.usernames(username), uid);
+    }catch(e){
+      if(!isPerm(e)) throw e;
+    }
+  }
+
+  if(!save){
+    const base = defaultState();
+    base.mode = "user";
+    base.uid = uid;
+    base.email = email;
+    base.username = username;
+    await dbSet(savePath, base);
+  }
+}
 
 function mapAuthError(e){
   const msg = String(e?.code || e?.message || "");
@@ -616,6 +697,7 @@ async function registerEmailPass(){
   if(!el.reg.robot.checked) return toast("Robot check required");
 
   const cred = await createUserWithEmailAndPassword(auth, email, pass);
+  await ensureOreClickerRoot();
 
   try{
     const ok = await claimUsername(cred.user.uid, username);
@@ -631,7 +713,7 @@ async function registerEmailPass(){
         403,
         "FORBIDDEN",
         "Database rules blocked username registration.",
-        `Check RTDB rules at: ${RTDB_URL}`
+        `Check RTDB rules at: ${RTDB_REF}`
       );
       return null;
     }
@@ -641,6 +723,12 @@ async function registerEmailPass(){
   try{ await updateProfile(cred.user, { displayName: username }); }catch{}
 
   await dbSet(path.userProfile(cred.user.uid), { username, email, createdAt: now() });
+  const base = defaultState();
+  base.mode = "user";
+  base.uid = cred.user.uid;
+  base.email = email;
+  base.username = username;
+  await dbSet(path.userSave(cred.user.uid), base);
   setLastUser(username);
 
   toast("Registered!");
@@ -685,8 +773,14 @@ const keys = {};
 let lastFrame = 0;
 let placementMode = null;
 let lastMouseWorld=null;
+const touchSupported = ("ontouchstart" in window) || (navigator.maxTouchPoints > 0);
+let touchState = { active:false, dx:0, dy:0 };
+let fpsAcc = 0;
+let fpsFrames = 0;
+let fpsValue = 0;
 
 let cam = { x:0, y:0 };
+let minimapExpanded = false;
 
 function resizeCanvas(){
   const dpr = Math.max(1, window.devicePixelRatio || 1);
@@ -699,19 +793,82 @@ function resizeCanvas(){
 }
 window.addEventListener("resize", resizeCanvas);
 
+function updateTouchVisibility(){
+  if(!el.touch.root) return;
+  el.touch.root.hidden = !touchSupported || !isRunning;
+}
+
+if(el.touch.pad){
+  const resetPad = ()=>{
+    touchState.active = false;
+    touchState.dx = 0;
+    touchState.dy = 0;
+    el.touch.knob.style.left = "50%";
+    el.touch.knob.style.top = "50%";
+    el.touch.knob.style.transform = "translate(-50%,-50%)";
+  };
+
+  const updatePad = (e)=>{
+    const rect = el.touch.pad.getBoundingClientRect();
+    const cx = rect.left + rect.width/2;
+    const cy = rect.top + rect.height/2;
+    const dx = e.clientX - cx;
+    const dy = e.clientY - cy;
+    const radius = rect.width/2;
+    const len = Math.hypot(dx, dy) || 1;
+    const clamped = Math.min(radius, len);
+    const nx = dx / len;
+    const ny = dy / len;
+    touchState.dx = (clamped / radius) * nx;
+    touchState.dy = (clamped / radius) * ny;
+    el.touch.knob.style.transform = "translate(-50%,-50%)";
+    el.touch.knob.style.left = `${rect.width/2 + nx*clamped}px`;
+    el.touch.knob.style.top = `${rect.height/2 + ny*clamped}px`;
+  };
+
+  el.touch.pad.addEventListener("pointerdown", (e)=>{
+    if(!touchSupported) return;
+    e.preventDefault();
+    touchState.active = true;
+    updatePad(e);
+    el.touch.pad.setPointerCapture(e.pointerId);
+  });
+  el.touch.pad.addEventListener("pointermove", (e)=>{
+    if(!touchState.active) return;
+    e.preventDefault();
+    updatePad(e);
+  });
+  el.touch.pad.addEventListener("pointerup", (e)=>{
+    if(!touchState.active) return;
+    e.preventDefault();
+    resetPad();
+    el.touch.pad.releasePointerCapture(e.pointerId);
+  });
+  el.touch.pad.addEventListener("pointercancel", resetPad);
+  el.touch.pad.addEventListener("pointerleave", (e)=>{
+    if(!touchState.active) return;
+    resetPad();
+  });
+}
+
+el.touch.mine?.addEventListener("click", (e)=>{ e.preventDefault(); if(!paused && !tabPaused) mineOre(); });
+el.touch.attack?.addEventListener("click", (e)=>{ e.preventDefault(); if(!paused && !tabPaused) attack(); });
+el.touch.use?.addEventListener("click", (e)=>{ e.preventDefault(); if(!paused && !tabPaused) useSelected(); });
+
 /* World */
 const WORLD = {
-  w: 2400, h: 1800,
+  w: 4600, h: 3400,
   shop: { x: 140, y: 140, w: 240, h: 160 },
   sell: { x: 420, y: 140, w: 240, h: 160 },
   base: { x: 140, y: 360, w: 520, h: 320 },
-  wild: { x: 820, y: 220, w: 1500, h: 1350 },
+  wild: { x: 1200, y: 400, w: 3000, h: 2700 },
 };
 const inRect=(px,py,r)=> (px>=r.x && py>=r.y && px<=r.x+r.w && py<=r.y+r.h);
 const rand=(a,b)=>a+Math.random()*(b-a);
 const clamp=(v,mi,ma)=>Math.max(mi, Math.min(ma, v));
 const worldToScreen=(wx,wy)=>({ x: (wx - cam.x), y:(wy - cam.y) });
 const screenToWorld=(sx,sy)=>({ x:sx+cam.x, y:sy+cam.y });
+const minimapCssRect=()=>({ x:12, y:12, size: minimapExpanded ? 240 : 120 });
 
 /* Ores */
 const ORE_TYPES = [
@@ -728,7 +885,12 @@ const ORE_COL = {
   ore_gold:"rgba(170,80,255,0.85)",
   ore_diamond:"rgba(255,210,70,0.9)"
 };
+const TREE_TYPES = [
+  { id:"wood", hp:3, minRespawn:6, maxRespawn:14, cap: 26, radius: 860 }
+];
+
 let ores = []; // {id,x,y,r,hp,maxHp,deadUntil}
+let trees = []; // {id,x,y,r,hp,maxHp,deadUntil}
 function scheduleOreRespawn(o){
   const t = ORE_TYPES.find(x=>x.id===o.id);
   const sec = rand(t.minRespawn, t.maxRespawn);
@@ -771,6 +933,48 @@ function updateOres(){
   ensureOreCaps();
 }
 
+function scheduleTreeRespawn(o){
+  const t = TREE_TYPES.find(x=>x.id===o.id);
+  const sec = rand(t.minRespawn, t.maxRespawn);
+  o.deadUntil = performance.now() + sec*1000;
+}
+function spawnTreeOne(type){
+  const cx = WORLD.wild.x + WORLD.wild.w*0.5;
+  const cy = WORLD.wild.y + WORLD.wild.h*0.5;
+  for(let i=0;i<30;i++){
+    const ang = Math.random()*Math.PI*2;
+    const rad = Math.random()*type.radius;
+    const x = clamp(cx + Math.cos(ang)*rad, WORLD.wild.x+30, WORLD.wild.x+WORLD.wild.w-30);
+    const y = clamp(cy + Math.sin(ang)*rad, WORLD.wild.y+30, WORLD.wild.y+WORLD.wild.h-30);
+    const ok = trees.every(o => o.deadUntil>0 || Math.hypot(o.x-x,o.y-y) > 42);
+    if(ok){
+      trees.push({ id:type.id, x, y, r:16, hp:type.hp, maxHp:type.hp, deadUntil:0 });
+      return true;
+    }
+  }
+  return false;
+}
+function ensureTreeCaps(){
+  for(const t of TREE_TYPES){
+    const alive = trees.filter(o=>o.id===t.id && o.deadUntil===0).length;
+    for(let i=0;i<Math.max(0, t.cap - alive);i++) spawnTreeOne(t);
+  }
+}
+function updateTrees(){
+  const tnow = performance.now();
+  for(const o of trees){
+    if(o.deadUntil && tnow >= o.deadUntil){
+      o.deadUntil = 0; o.hp = o.maxHp;
+      const t = TREE_TYPES.find(x=>x.id===o.id);
+      const ang = Math.random()*Math.PI*2;
+      const rad = rand(120, t.radius);
+      o.x = clamp(o.x + Math.cos(ang)*rad, WORLD.wild.x+30, WORLD.wild.x+WORLD.wild.w-30);
+      o.y = clamp(o.y + Math.sin(ang)*rad, WORLD.wild.y+30, WORLD.wild.y+WORLD.wild.h-30);
+    }
+  }
+  ensureTreeCaps();
+}
+
 /* Enemies */
 let enemies = []; // {x,y,r,hp,spd,hitCd}
 function spawnEnemy(){
@@ -784,12 +988,21 @@ function ensureEnemies(){
 }
 
 /* Pickups: physical drops + rare consumables */
-let pickups = []; // {kind,id,x,y,r,ttlMs} kind: "item"
+let pickups = []; // {kind,id,x,y,r,ttlMs,qty} kind: "item"
 const pickupCap = 40;
 
-function spawnPickup(id, x, y, ttlMs=60000){
+function spawnPickup(id, x, y, ttlMs=60000, qty=1){
   if(pickups.length >= pickupCap) return;
-  pickups.push({ kind:"item", id, x, y, r:10, ttlMs });
+  const def = ITEMS[id];
+  if(def?.stack){
+    const hit = pickups.find(p=>p.id===id && Math.hypot(p.x-x, p.y-y) <= 22);
+    if(hit){
+      hit.qty = Math.min(9999, (hit.qty||1) + qty);
+      hit.ttlMs = Math.max(hit.ttlMs, ttlMs);
+      return;
+    }
+  }
+  pickups.push({ kind:"item", id, x, y, r:10, ttlMs, qty });
 }
 
 let consumableTimer=0;
@@ -816,14 +1029,15 @@ function collectPickups(){
   for(let i=pickups.length-1;i>=0;i--){
     const p = pickups[i];
     if(Math.hypot(p.x-S.player.x, p.y-S.player.y) <= (p.r+12)){
-      if(p.id.startsWith("ore_")){
-        S.resources[p.id] = (S.resources[p.id]||0) + 1;
+      const qty = p.qty || 1;
+      if(Object.prototype.hasOwnProperty.call(S.resources, p.id)){
+        S.resources[p.id] = (S.resources[p.id]||0) + qty;
       }
-      addItem(S.inventory, makeItem(p.id, 1));
+      addItem(S.inventory, makeItem(p.id, qty));
       pickups.splice(i,1);
       invUI.render();
       renderResources();
-      setSideStatus(`Picked up ${ITEMS[p.id]?.name||p.id}`);
+      setSideStatus(`Picked up ${qty} ${ITEMS[p.id]?.name||p.id}`);
     }
   }
 }
@@ -873,8 +1087,9 @@ function updateDroppers(dt){
         const p = pickups[i];
         const d = Math.hypot(p.x-c.x, p.y-c.y);
         if(d <= 90){
-          if(p.id.startsWith("ore_")) S.resources[p.id] = (S.resources[p.id]||0)+1;
-          addItem(S.inventory, makeItem(p.id,1));
+          const qty = p.qty || 1;
+          if(Object.prototype.hasOwnProperty.call(S.resources, p.id)) S.resources[p.id] = (S.resources[p.id]||0)+qty;
+          addItem(S.inventory, makeItem(p.id,qty));
           pickups.splice(i,1);
         }
       }
@@ -903,12 +1118,21 @@ function nearestOre(){
   }
   return best;
 }
+function nearestTree(){
+  let best=null, bd=1e9;
+  for(const o of trees){
+    if(o.deadUntil) continue;
+    const d = Math.hypot(o.x-S.player.x, o.y-S.player.y);
+    if(d < 40 && d<bd){ best=o; bd=d; }
+  }
+  return best;
+}
 
 function damageEquipment(eq){
   if(!eq) return;
   const def = eq.def;
   if(!def || def.stack) return;
-  if(def.type!=="tool" && def.type!=="melee") return;
+  if(def.type!=="tool" && def.type!=="melee" && def.type!=="axe") return;
   const max = def.maxDur ?? 100;
   eq.slot.dur = Math.max(0, (eq.slot.dur ?? max) - 1);
   if(eq.slot.dur<=0){
@@ -918,29 +1142,61 @@ function damageEquipment(eq){
 }
 
 function mineOre(){
-  const o = nearestOre();
-  if(!o){ setSideStatus("No ore nearby"); return; }
   const eq = equipped(S.inventory);
-  let power = 1;
-  if(eq?.def?.type==="tool") power = eq.def.mine || 1;
-  damageEquipment(eq);
-
-  o.hp -= power;
-  setSideStatus(`Mining ${ITEMS[o.id].name}…`);
-  if(o.hp<=0){
-    const yieldAmt = o.id==="ore_basic"?2 : o.id==="ore_coal"?2 : o.id==="ore_iron"?2 : o.id==="ore_gold"?1 : 1;
-    S.resources[o.id] = (S.resources[o.id]||0) + yieldAmt;
-    addItem(S.inventory, makeItem(o.id, yieldAmt));
-    toast(`+${yieldAmt} ${ITEMS[o.id].name}`);
-    scheduleOreRespawn(o);
+  if(!eq?.def){
+    setSideStatus("Equip a pickaxe or axe");
+    return;
   }
-  invUI.render();
-  renderResources();
+
+  if(eq.def.type==="tool"){
+    const o = nearestOre();
+    if(!o){ setSideStatus("No ore nearby"); return; }
+    const power = eq.def.mine || 1;
+    damageEquipment(eq);
+
+    o.hp -= power;
+    setSideStatus(`Mining ${ITEMS[o.id].name}…`);
+    if(o.hp<=0){
+      const yieldAmt = o.id==="ore_basic"?2 : o.id==="ore_coal"?2 : o.id==="ore_iron"?2 : o.id==="ore_gold"?1 : 1;
+      S.resources[o.id] = (S.resources[o.id]||0) + yieldAmt;
+      addItem(S.inventory, makeItem(o.id, yieldAmt));
+      toast(`+${yieldAmt} ${ITEMS[o.id].name}`);
+      scheduleOreRespawn(o);
+    }
+    invUI.render();
+    renderResources();
+    return;
+  }
+
+  if(eq.def.type==="axe"){
+    const t = nearestTree();
+    if(!t){ setSideStatus("No trees nearby"); return; }
+    const power = eq.def.chop || 1;
+    damageEquipment(eq);
+    t.hp -= power;
+    setSideStatus("Chopping wood…");
+    if(t.hp<=0){
+      const yieldAmt = 2;
+      S.resources.wood = (S.resources.wood||0) + yieldAmt;
+      addItem(S.inventory, makeItem("wood", yieldAmt));
+      toast(`+${yieldAmt} Wood`);
+      scheduleTreeRespawn(t);
+    }
+    invUI.render();
+    renderResources();
+    return;
+  }
+
+  setSideStatus("Equip a pickaxe or axe");
 }
 
 function attack(){
   const eq = equipped(S.inventory);
-  const atk = eq?.def?.type==="melee" ? (eq.def.atk||1) : 1;
+  if(!eq?.def || (eq.def.type!=="melee" && eq.def.type!=="axe")){
+    setSideStatus("Equip a sword or axe");
+    return;
+  }
+  const atk = eq.def.atk||1;
   damageEquipment(eq);
 
   let best=null, bd=1e9;
@@ -953,8 +1209,9 @@ function attack(){
   best.hp -= atk;
   setSideStatus(`Hit enemy (-${atk})`);
   if(best.hp<=0){
-    const drop = Math.random()<0.65 ? "ore_basic" : (Math.random()<0.35 ? "ore_coal" : "ore_iron");
-    S.resources[drop] += 1;
+    const dropRoll = Math.random();
+    const drop = dropRoll < 0.15 ? "wood" : (dropRoll < 0.65 ? "ore_basic" : (dropRoll < 0.82 ? "ore_coal" : "ore_iron"));
+    if(Object.prototype.hasOwnProperty.call(S.resources, drop)) S.resources[drop] += 1;
     addItem(S.inventory, makeItem(drop,1));
     toast("Enemy defeated!");
     enemies = enemies.filter(x=>x!==best);
@@ -1017,6 +1274,8 @@ function updateEnemies(dt){
       m.x += dx*m.spd*dt;
       m.y += dy*m.spd*dt;
     }
+    m.x = clamp(m.x, WORLD.wild.x+20, WORLD.wild.x+WORLD.wild.w-20);
+    m.y = clamp(m.y, WORLD.wild.y+20, WORLD.wild.y+WORLD.wild.h-20);
     m.hitCd = Math.max(0, (m.hitCd||0) - dt);
     if(d < (m.r+12) && m.hitCd<=0){
       m.hitCd = 0.8;
@@ -1038,8 +1297,8 @@ function move(dt){
   const dn = isDown(hk.moveDown) || isDown("ArrowDown");
   const lf = isDown(hk.moveLeft) || isDown("ArrowLeft");
   const rt = isDown(hk.moveRight) || isDown("ArrowRight");
-  const ix = (rt?1:0) - (lf?1:0);
-  const iy = (dn?1:0) - (up?1:0);
+  const ix = (rt?1:0) - (lf?1:0) + (touchState.dx || 0);
+  const iy = (dn?1:0) - (up?1:0) + (touchState.dy || 0);
   const len = Math.hypot(ix,iy) || 1;
   const spd = 220;
   S.player.x = clamp(S.player.x + (ix/len)*spd*dt, 0, WORLD.w);
@@ -1142,6 +1401,21 @@ function draw(){
     ctx.strokeStyle="rgba(255,255,255,0.18)"; ctx.strokeRect(p.x-18, p.y+18, 36, 5);
   }
 
+  // trees
+  for(const t of trees){
+    if(t.deadUntil) continue;
+    const p = worldToScreen(t.x, t.y);
+    ctx.fillStyle="rgba(120,255,160,0.35)";
+    ctx.beginPath(); ctx.arc(p.x, p.y, t.r+4, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle="rgba(120,255,160,0.6)"; ctx.stroke();
+    ctx.fillStyle="rgba(60,120,80,0.7)";
+    ctx.beginPath(); ctx.arc(p.x, p.y, t.r-2, 0, Math.PI*2); ctx.fill();
+    const pct = t.maxHp ? (t.hp/t.maxHp) : 0;
+    ctx.fillStyle="rgba(0,0,0,0.55)"; ctx.fillRect(p.x-18, p.y+18, 36, 5);
+    ctx.fillStyle="rgba(120,255,170,0.75)"; ctx.fillRect(p.x-18, p.y+18, 36*Math.max(0,pct), 5);
+    ctx.strokeStyle="rgba(255,255,255,0.18)"; ctx.strokeRect(p.x-18, p.y+18, 36, 5);
+  }
+
   // pickups
   for(const p0 of pickups){
     const p = worldToScreen(p0.x, p0.y);
@@ -1151,6 +1425,11 @@ function draw(){
     ctx.fillStyle="rgba(255,255,255,0.85)";
     ctx.font="700 12px Rajdhani, system-ui";
     ctx.fillText(ITEMS[p0.id]?.icon || "❓", p.x-5, p.y+4);
+    if(p0.qty && p0.qty>1){
+      ctx.fillStyle="rgba(255,255,255,0.9)";
+      ctx.font="700 10px Rajdhani, system-ui";
+      ctx.fillText(`x${p0.qty}`, p.x-8, p.y+18);
+    }
   }
 
   // enemies
@@ -1163,6 +1442,61 @@ function draw(){
     ctx.fillStyle="rgba(255,255,255,0.75)"; ctx.fillRect(p.x-18, p.y+18, 36*(m.hp/24), 5);
   }
 
+  // minimap
+  const mini = minimapCssRect();
+  const dpr = Math.max(1, window.devicePixelRatio || 1);
+  const mx = mini.x * dpr;
+  const my = mini.y * dpr;
+  const ms = mini.size * dpr;
+  ctx.save();
+  ctx.fillStyle = "rgba(0,0,0,0.55)";
+  ctx.fillRect(mx, my, ms, ms);
+  ctx.strokeStyle = "rgba(255,255,255,0.35)";
+  ctx.strokeRect(mx, my, ms, ms);
+  const sx = ms / WORLD.w;
+  const sy = ms / WORLD.h;
+  const mapPoint = (wx,wy)=>({ x: mx + wx*sx, y: my + wy*sy });
+
+  const baseP = mapPoint(WORLD.base.x, WORLD.base.y);
+  ctx.fillStyle = "rgba(255,255,255,0.5)";
+  ctx.fillRect(baseP.x, baseP.y, WORLD.base.w*sx, WORLD.base.h*sy);
+
+  const wildP = mapPoint(WORLD.wild.x, WORLD.wild.y);
+  ctx.fillStyle = "rgba(255,80,80,0.2)";
+  ctx.fillRect(wildP.x, wildP.y, WORLD.wild.w*sx, WORLD.wild.h*sy);
+
+  const playerP = mapPoint(S.player.x, S.player.y);
+  ctx.fillStyle = "rgba(120,255,170,0.9)";
+  ctx.beginPath(); ctx.arc(playerP.x, playerP.y, 3*dpr, 0, Math.PI*2); ctx.fill();
+
+  if(minimapExpanded){
+    const baseCx = WORLD.base.x + WORLD.base.w*0.5;
+    const baseCy = WORLD.base.y + WORLD.base.h*0.5;
+    const dist = Math.hypot(S.player.x - baseCx, S.player.y - baseCy);
+    if(dist > 200){
+      const dx = baseCx - S.player.x;
+      const dy = baseCy - S.player.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const ax = playerP.x + (dx/len) * 12 * dpr;
+      const ay = playerP.y + (dy/len) * 12 * dpr;
+      ctx.strokeStyle = "rgba(120,255,170,0.9)";
+      ctx.lineWidth = 2 * dpr;
+      ctx.beginPath();
+      ctx.moveTo(playerP.x, playerP.y);
+      ctx.lineTo(ax, ay);
+      ctx.stroke();
+      ctx.fillStyle = "rgba(120,255,170,0.9)";
+      ctx.beginPath();
+      ctx.arc(ax, ay, 2*dpr, 0, Math.PI*2);
+      ctx.fill();
+
+      ctx.fillStyle = "rgba(255,255,255,0.85)";
+      ctx.font = `${12*dpr}px Rajdhani, system-ui`;
+      ctx.fillText(`${Math.round(dist)}m`, mx + 8*dpr, my + ms - 8*dpr);
+    }
+  }
+  ctx.restore();
+
   // player
   const pp = worldToScreen(S.player.x, S.player.y);
   ctx.fillStyle = sellZoneActive() ? "rgba(120,255,170,0.95)" : "rgba(255,255,255,0.85)";
@@ -1174,7 +1508,8 @@ function draw(){
   ctx.fillStyle="rgba(255,255,255,0.70)";
   if(inRect(S.player.x, S.player.y, WORLD.shop)) ctx.fillText("Open pause menu to access Shop", pp.x+14, pp.y-14);
   if(sellZoneActive()) ctx.fillText("Open pause menu to access Sell Area", pp.x+14, pp.y+2);
-  if(nearestOre()) ctx.fillText("Press mine key to mine", pp.x+14, pp.y+18);
+  if(nearestOre()) ctx.fillText("Press mine key to mine ore", pp.x+14, pp.y+18);
+  else if(nearestTree()) ctx.fillText("Press mine key to chop wood", pp.x+14, pp.y+18);
 }
 
 /* Inventory UI */
@@ -1587,6 +1922,134 @@ function openSellArea(){
   });
 }
 
+/* Crafting */
+const MATERIALS = ["ore_basic","ore_coal","ore_iron","ore_gold","ore_diamond"];
+const craftLabel = (id)=> ITEMS[id]?.name || id;
+
+function countItem(id){
+  let count = 0;
+  for(const arr of [S.inventory.hotbar, S.inventory.inv]){
+    for(const slot of arr){
+      if(!slot || slot.id !== id) continue;
+      count += ITEMS[id]?.stack ? (slot.qty||1) : 1;
+    }
+  }
+  return count;
+}
+
+function consumeItem(id, qty){
+  let left = qty;
+  for(const arr of [S.inventory.hotbar, S.inventory.inv]){
+    for(let i=0;i<arr.length;i++){
+      const slot = arr[i];
+      if(!slot || slot.id !== id) continue;
+      if(ITEMS[id]?.stack){
+        const take = Math.min(left, slot.qty||1);
+        slot.qty = (slot.qty||1) - take;
+        left -= take;
+        if(slot.qty<=0) arr[i] = null;
+      } else {
+        arr[i] = null;
+        left -= 1;
+      }
+      if(left<=0) return true;
+    }
+  }
+  return left<=0;
+}
+
+function openCraftingArea(){
+  const body = document.createElement("div");
+  const status = document.createElement("div");
+  status.className = "smallmuted";
+  status.textContent = "Select a recipe to craft. Crafting takes 3 seconds.";
+
+  let crafting = false;
+
+  const recipeRows = [];
+  for(const mat of MATERIALS){
+    recipeRows.push({ label: `${craftLabel(mat)} Sword`, result: `sword_${mat.split("_")[1]}`, mat, matQty:2, stickQty:1 });
+    recipeRows.push({ label: `${craftLabel(mat)} Axe`, result: `axe_${mat.split("_")[1]}`, mat, matQty:3, stickQty:1 });
+    recipeRows.push({ label: `${craftLabel(mat)} Pickaxe`, result: `pick_${mat.split("_")[1]}`, mat, matQty:5, stickQty:1 });
+  }
+
+  const renderRecipes = ()=>{
+    body.innerHTML = `
+      <div class="card sharp">
+        <div class="cardTitle">Crafting Area</div>
+        <div class="smallmuted">Use sticks + materials to craft tools.</div>
+      </div>
+      <div class="card sharp" style="margin-top:10px;">
+        <div class="cardTitle">Stick Prep</div>
+        <div class="smallmuted">Convert wood into sticks for crafting.</div>
+        <div class="row" style="margin-top:8px;">
+          <button class="btn sharp small" id="craftStick">CRAFT 2x STICK (1 WOOD)</button>
+        </div>
+      </div>
+      <div class="card sharp" style="margin-top:10px;">
+        <div class="cardTitle">Recipes</div>
+        <div id="craftRows"></div>
+      </div>
+    `;
+    body.appendChild(status);
+
+    const rows = body.querySelector("#craftRows");
+    rows.innerHTML = recipeRows.map((r, i)=>`
+      <div style="display:flex; gap:10px; align-items:center; justify-content:space-between; border:1px solid rgba(255,255,255,0.10); background: rgba(255,255,255,0.02); padding:10px; margin-top:10px;">
+        <div>
+          <div style="font-family:Orbitron,Rajdhani,system-ui;text-transform:uppercase;letter-spacing:0.6px;font-size:12px;">${r.label}</div>
+          <div class="smallmuted">Requires: 1x Stick + ${r.matQty}x ${craftLabel(r.mat)}</div>
+        </div>
+        <button class="btn sharp small primary" data-craft="${i}">CRAFT</button>
+      </div>
+    `).join("");
+  };
+
+  const beginCraft = (recipe)=>{
+    if(crafting) return;
+    const sticks = countItem("stick");
+    const mats = countItem(recipe.mat);
+    if(sticks < recipe.stickQty) return toast("Need sticks to craft");
+    if(mats < recipe.matQty) return toast("Not enough materials");
+
+    consumeItem("stick", recipe.stickQty);
+    consumeItem(recipe.mat, recipe.matQty);
+    invUI.render();
+
+    crafting = true;
+    status.textContent = `Crafting ${craftLabel(recipe.result)}...`;
+    setTimeout(()=>{
+      addItem(S.inventory, makeItem(recipe.result, 1));
+      invUI.render();
+      crafting = false;
+      status.textContent = `${craftLabel(recipe.result)} crafted!`;
+    }, 3000);
+  };
+
+  renderRecipes();
+  body.addEventListener("click", (e)=>{
+    if(e.target.id==="craftStick"){
+      if(countItem("wood") < 1) return toast("Need wood to craft sticks");
+      consumeItem("wood", 1);
+      addItem(S.inventory, makeItem("stick", 2));
+      invUI.render();
+      status.textContent = "Crafted 2 sticks!";
+      return;
+    }
+    const btn = e.target.closest("[data-craft]");
+    if(!btn) return;
+    const idx = Number(btn.dataset.craft);
+    const recipe = recipeRows[idx];
+    if(recipe) beginCraft(recipe);
+  });
+
+  modal.open({
+    title: "Crafting Area",
+    bodyNode: body,
+    buttons: [{ text:"CLOSE", onClick: ()=>modal.close() }]
+  });
+}
+
 /* Pause Menu (pauses because modal open => paused=true) */
 function openPauseMenu(){
   const canSell = sellZoneActive();
@@ -1608,6 +2071,7 @@ function openPauseMenu(){
       <div class="row">
         <button class="btn sharp small primary" id="btnOpenShop">SHOP</button>
         <button class="btn sharp small ${canSell?"primary":""}" id="btnOpenSell" ${canSell?"":"disabled"}>SELL AREA</button>
+        <button class="btn sharp small" id="btnOpenCrafting">CRAFTING</button>
         <button class="btn sharp small" id="btnMainMenu">MAIN MENU</button>
       </div>
       <div class="smallmuted" style="margin-top:8px;">
@@ -1629,6 +2093,7 @@ function openPauseMenu(){
   body.addEventListener("click",(e)=>{
     if(e.target.id==="btnOpenShop"){ modal.close(); shopUI.open(); }
     if(e.target.id==="btnOpenSell"){ modal.close(); openSellArea(); }
+    if(e.target.id==="btnOpenCrafting"){ modal.close(); openCraftingArea(); }
     if(e.target.id==="btnMainMenu"){ modal.close(); stopGameToMenu(); }
     if(e.target.id==="btnPauseLogin"){ modal.close(); showScreen(el.screens.login); }
     if(e.target.id==="btnLogout"){ modal.close(); doLogout(); }
@@ -1661,7 +2126,18 @@ function openGameSettings(){
   body.innerHTML = `
     <div class="card sharp">
       <div class="cardTitle">Game Settings</div>
-      <div class="smallmuted">Click REBIND then press a key. Use DEFAULT to restore.</div>
+      <div class="smallmuted">Settings are grouped by category.</div>
+    </div>
+    <div class="card sharp" style="margin-top:10px;">
+      <div class="cardTitle">Display</div>
+      <div class="smallmuted" style="margin-bottom:8px;">Visual helpers and overlays.</div>
+      <div class="row">
+        <button class="btn sharp small ${S.settings.showFps?"primary":""}" id="toggleFps">${S.settings.showFps?"FPS ON":"FPS OFF"}</button>
+      </div>
+    </div>
+    <div class="card sharp" style="margin-top:10px;">
+      <div class="cardTitle">Controls</div>
+      <div class="smallmuted">Touch controls ${touchSupported ? "are enabled on touchscreen devices." : "are unavailable on this device."}</div>
     </div>
     <div class="card sharp" style="margin-top:10px;">
       <div class="cardTitle">Hotkeys</div>
@@ -1691,6 +2167,10 @@ function openGameSettings(){
       toast("Press a key…");
       window.addEventListener("keydown", onKey, { passive:false });
     }
+    if(e.target.id==="toggleFps"){
+      S.settings.showFps = !S.settings.showFps;
+      modal.refresh();
+    }
     if(e.target.id==="hkDefault"){
       S.hotkeys = defaultHotkeys();
       toast("Defaults applied");
@@ -1710,7 +2190,7 @@ function openGameSettings(){
 /* What's New */
 function openWhatsNewModal(){
   const body = document.createElement("div");
-  renderChangelog(body, "0.7");
+  renderChangelog(body, "0.8");
   modal.open({ title:"What’s New", bodyNode: body, buttons:[{text:"CLOSE", onClick:()=>modal.close()}] });
 }
 
@@ -1727,6 +2207,14 @@ el.canvas.addEventListener("pointermove",(e)=>{
   lastMouseWorld = screenToWorld(sx, sy);
 });
 el.canvas.addEventListener("pointerdown",(e)=>{
+  const rect = el.canvas.getBoundingClientRect();
+  const cssX = e.clientX - rect.left;
+  const cssY = e.clientY - rect.top;
+  const mini = minimapCssRect();
+  if(cssX >= mini.x && cssX <= mini.x + mini.size && cssY >= mini.y && cssY <= mini.y + mini.size){
+    minimapExpanded = !minimapExpanded;
+    return;
+  }
   if(!placementMode) return;
   e.preventDefault();
   if(!lastMouseWorld) return;
@@ -1736,6 +2224,17 @@ el.canvas.addEventListener("pointerdown",(e)=>{
 /* Disable highlight/drag */
 window.addEventListener("selectstart",(e)=>e.preventDefault());
 window.addEventListener("dragstart",(e)=>e.preventDefault());
+document.addEventListener("visibilitychange", ()=>{
+  tabPaused = document.hidden;
+  if(tabPaused && isRunning) setSideStatus("Paused (tab inactive)");
+});
+window.addEventListener("blur", ()=>{
+  tabPaused = true;
+  if(isRunning) setSideStatus("Paused (tab inactive)");
+});
+window.addEventListener("focus", ()=>{
+  tabPaused = false;
+});
 
 /* Saving (cloud) */
 let saveTimer=null;
@@ -1760,13 +2259,14 @@ async function cloudSave(){
       daily: S.daily,
       weekly: S.weekly,
       offline: S.offline,
-      hotkeys: S.hotkeys
+      hotkeys: S.hotkeys,
+      settings: S.settings
     };
     await dbSet(path.userSave(S.uid), data);
   }catch(e){
     if(isPerm(e)){
       cloudEnabled=false;
-      showError(403,"FORBIDDEN","Saving blocked by database rules.", `RTDB: ${RTDB_URL}`);
+      showError(403,"FORBIDDEN","Saving blocked by database rules.", `RTDB: ${RTDB_REF}`);
       stopSaving();
       return;
     }
@@ -1794,9 +2294,10 @@ function startGame(){
   showScreen(el.screens.game);
   isRunning=true;
   resizeCanvas();
+  updateTouchVisibility();
 
-  ores=[]; enemies=[]; pickups=[];
-  ensureOreCaps(); ensureEnemies();
+  ores=[]; trees=[]; enemies=[]; pickups=[];
+  ensureOreCaps(); ensureTreeCaps(); ensureEnemies();
   dropperRuntime = new WeakMap();
   collectorRuntime = 0;
 
@@ -1832,6 +2333,7 @@ function stopGameToMenu(){
   stopSaving();
   modal.close();
   showScreen(el.screens.menu);
+  updateTouchVisibility();
   setMenuAuthUI(auth?.currentUser || null);
 }
 
@@ -1839,10 +2341,22 @@ function loop(t){
   if(!isRunning) return;
   const rawDt = Math.min(0.033, ((t - lastFrame) / 1000) || 0);
   lastFrame = t;
-  const dt = paused ? 0 : rawDt;
+  const dt = (paused || tabPaused) ? 0 : rawDt;
+  fpsAcc += rawDt;
+  fpsFrames += 1;
+  if(fpsAcc >= 0.5){
+    fpsValue = Math.round(fpsFrames / fpsAcc);
+    fpsAcc = 0;
+    fpsFrames = 0;
+  }
+  if(el.fpsCounter){
+    el.fpsCounter.hidden = !S.settings.showFps || !isRunning;
+    el.fpsCounter.textContent = `FPS: ${fpsValue || 0}`;
+  }
 
   if(dt>0){
     updateOres();
+    updateTrees();
     updateDroppers(dt);
     updateEnemies(dt);
     updateConsumableSpawns(dt);
@@ -1871,7 +2385,7 @@ window.addEventListener("keydown",(e)=>{
 
   const hk = S.hotkeys;
   if(e.code===hk.pause){ e.preventDefault(); openPauseMenu(); }
-  if(paused) return;
+  if(paused || tabPaused) return;
 
   if(e.code===hk.mine){ e.preventDefault(); mineOre(); }
   if(e.code===hk.attack){ e.preventDefault(); attack(); }
@@ -1904,7 +2418,7 @@ el.menu.goLogin.addEventListener("click", ()=>showScreen(el.screens.login));
 el.menu.goRegister.addEventListener("click", ()=>showScreen(el.screens.register));
 
 el.menu.whatsNew.addEventListener("click", ()=>{
-  renderChangelog(el.whatsNewRoot, "0.7");
+  renderChangelog(el.whatsNewRoot, "0.8");
   showScreen(el.screens.whatsNew);
 });
 el.btnWhatsNewBack?.addEventListener("click", ()=>showScreen(el.screens.menu));
@@ -1957,7 +2471,7 @@ el.login.form.addEventListener("submit", async (e)=>{
   }catch(err){
     const m = mapAuthError(err);
     if(String(err?.message||"").includes("username_lookup_unavailable")){
-      showError(403,"FORBIDDEN","Username login unavailable. Use email.", `RTDB: ${RTDB_URL}`);
+      showError(403,"FORBIDDEN","Username login unavailable. Use email.", `RTDB: ${RTDB_REF}`);
     } else {
       showError(m.code, m.title, m.desc, "");
     }
@@ -2078,6 +2592,8 @@ if(auth){
     if(user){
       try{
         cloudEnabled=true;
+        await ensureOreClickerRoot();
+        await ensureUserRecords(user);
         const loaded = await loadCloud(user.uid);
         S = loaded ? loaded : defaultState();
         S.mode="user";
@@ -2092,7 +2608,7 @@ if(auth){
         setLastUser(S.username || S.email || "user");
       }catch(e){
         const m = mapAuthError(e);
-        showError(m.code, m.title, "Loading failed. You can still play as guest.", `RTDB: ${RTDB_URL}`);
+        showError(m.code, m.title, "Loading failed. You can still play as guest.", `RTDB: ${RTDB_REF}`);
       }
     } else {
       // logged out
