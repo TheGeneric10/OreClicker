@@ -22,6 +22,9 @@ const RTDB_URL = "https://thegeneric-685b0-default-rtdb.firebaseio.com";
 const RTDB_ROOT = "OreClicker";
 const RTDB_DATA = `${RTDB_ROOT}/data`;
 const RTDB_REF = `${RTDB_URL}/${RTDB_ROOT}`;
+const RTDB_URL = "https://thegeneric-685b0-default-rtdb.firebaseio.com/";
+const RTDB_ROOT = "OreClicker";
+const RTDB_REF = `${RTDB_URL}${RTDB_ROOT}`;
 
 const el={
   screens:{
@@ -301,6 +304,7 @@ if(db){
 
 /* Save model */
 const SAVE_VERSION="0.9";
+const SAVE_VERSION="0.8";
 const LAST_USER_KEY="oreclicker_last_user";
 
 const defaultHotkeys=()=>({
@@ -473,6 +477,8 @@ const path = {
   dataRoot: ()=> RTDB_DATA,
   userSave: (uid)=> `${RTDB_DATA}/users/${uid}/save`,
   userProfile: (uid)=> `${RTDB_DATA}/users/${uid}/profile`,
+  userSave: (uid)=> `${RTDB_ROOT}/users/${uid}/save`,
+  userProfile: (uid)=> `${RTDB_ROOT}/users/${uid}/profile`,
   usernames: (u)=> `${RTDB_ROOT}/usernames/${String(u||"").toLowerCase()}`
 };
 
@@ -499,6 +505,9 @@ async function ensureOreClickerRoot(){
     const data = await dbGet(path.dataRoot());
     if(!data){
       await dbSet(path.dataRoot(), { createdAt: now() });
+    const root = await dbGet(path.root());
+    if(!root){
+      await dbSet(path.root(), { meta:{ createdAt: now(), version: SAVE_VERSION } });
     }
   }catch(e){
     if(!isPerm(e)) throw e;
@@ -912,6 +921,7 @@ const ORE_COL = {
 };
 const TREE_TYPES = [
   { id:"wood", hp:3, minRespawn:6, maxRespawn:14, cap: 26, radius: 1500 }
+  { id:"wood", hp:3, minRespawn:6, maxRespawn:14, cap: 26, radius: 860 }
 ];
 
 let ores = []; // {id,x,y,r,hp,maxHp,deadUntil}
@@ -972,6 +982,7 @@ function spawnTreeOne(type){
     const x = clamp(cx + Math.cos(ang)*rad, WORLD.wild.x+30, WORLD.wild.x+WORLD.wild.w-30);
     const y = clamp(cy + Math.sin(ang)*rad, WORLD.wild.y+30, WORLD.wild.y+WORLD.wild.h-30);
     const ok = trees.every(o => o.deadUntil>0 || Math.hypot(o.x-x,o.y-y) > 70);
+    const ok = trees.every(o => o.deadUntil>0 || Math.hypot(o.x-x,o.y-y) > 42);
     if(ok){
       trees.push({ id:type.id, x, y, r:16, hp:type.hp, maxHp:type.hp, deadUntil:0 });
       return true;
@@ -1197,6 +1208,40 @@ function mineOre(){
     setSideStatus("Equip a pickaxe or axe");
     return;
   }
+
+  if(eq.def.type==="tool"){
+    const o = nearestOre();
+    if(!o){ setSideStatus("No ore nearby"); return; }
+    const power = eq.def.mine || 1;
+    damageEquipment(eq);
+
+    o.hp -= power;
+    setSideStatus(`Mining ${ITEMS[o.id].name}…`);
+    if(o.hp<=0){
+      const yieldAmt = o.id==="ore_basic"?2 : o.id==="ore_coal"?2 : o.id==="ore_iron"?2 : o.id==="ore_gold"?1 : 1;
+      S.resources[o.id] = (S.resources[o.id]||0) + yieldAmt;
+      addItem(S.inventory, makeItem(o.id, yieldAmt));
+      toast(`+${yieldAmt} ${ITEMS[o.id].name}`);
+      scheduleOreRespawn(o);
+    }
+    invUI.render();
+    renderResources();
+    return;
+  }
+
+  if(eq.def.type==="axe"){
+    const t = nearestTree();
+    if(!t){ setSideStatus("No trees nearby"); return; }
+    const power = eq.def.chop || 1;
+    damageEquipment(eq);
+    t.hp -= power;
+    setSideStatus("Chopping wood…");
+    if(t.hp<=0){
+      const yieldAmt = 2;
+      S.resources.wood = (S.resources.wood||0) + yieldAmt;
+      addItem(S.inventory, makeItem("wood", yieldAmt));
+      toast(`+${yieldAmt} Wood`);
+      scheduleTreeRespawn(t);
 
   if(eq.def.type==="tool"){
     const o = nearestOre();
@@ -2047,6 +2092,7 @@ function openCraftingArea(){
         <div class="smallmuted">Convert wood into sticks for crafting.</div>
         <div class="row" style="margin-top:8px;">
           <button class="btn sharp small" id="craftStick">CRAFT 1x STICK (4 WOOD)</button>
+          <button class="btn sharp small" id="craftStick">CRAFT 2x STICK (1 WOOD)</button>
         </div>
       </div>
       <div class="card sharp" style="margin-top:10px;">
@@ -2097,6 +2143,11 @@ function openCraftingArea(){
       addItem(S.inventory, makeItem("stick", 1));
       invUI.render();
       status.textContent = "Crafted 1 stick!";
+      if(countItem("wood") < 1) return toast("Need wood to craft sticks");
+      consumeItem("wood", 1);
+      addItem(S.inventory, makeItem("stick", 2));
+      invUI.render();
+      status.textContent = "Crafted 2 sticks!";
       return;
     }
     const btn = e.target.closest("[data-craft]");
