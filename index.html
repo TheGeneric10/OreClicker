@@ -50,7 +50,11 @@
             <div class="smallmuted">Enter password to continue.</div>
 
             <form id="quickLoginForm" autocomplete="on">
-              <input class="input sharp" id="quickPass" type="password" placeholder="Password" autocomplete="current-password" />
+              <input class="input sharp visuallyHidden" type="text" name="username" autocomplete="username" />
+              <div class="inputRow">
+                <input class="input sharp" id="quickPass" type="password" placeholder="Password" autocomplete="current-password" />
+                <button class="btn sharp small togglePass" type="button" data-target="quickPass">SHOW</button>
+              </div>
               <div class="row">
                 <button class="btn sharp primary" id="btnQuickLogin" type="submit">CONTINUE</button>
                 <button class="btn sharp" id="btnNotMe" type="button">NOT ME</button>
@@ -85,7 +89,10 @@
 
         <form id="loginForm" autocomplete="on">
           <input class="input sharp" id="loginEmail" type="text" placeholder="Username or Email" autocomplete="username" />
-          <input class="input sharp" id="loginPass" type="password" placeholder="Password" autocomplete="current-password" />
+          <div class="inputRow">
+            <input class="input sharp" id="loginPass" type="password" placeholder="Password" autocomplete="current-password" />
+            <button class="btn sharp small togglePass" type="button" data-target="loginPass">SHOW</button>
+          </div>
 
           <label class="checkRow">
             <input type="checkbox" id="loginRemember" />
@@ -125,14 +132,20 @@
           </div>
 
           <div class="meterWrap">
-            <input class="input sharp" id="regPass" type="password" placeholder="Password" autocomplete="new-password" aria-autocomplete="list" />
+            <div class="inputRow">
+              <input class="input sharp" id="regPass" type="password" placeholder="Password" autocomplete="new-password" aria-autocomplete="list" />
+              <button class="btn sharp small togglePass" type="button" data-target="regPass">SHOW</button>
+            </div>
             <div class="meterRow">
               <div class="meterBar"><i id="passMeter"></i></div>
               <div class="meterText" id="passMeterText">Password requirements</div>
             </div>
           </div>
 
-          <input class="input sharp" id="regPass2" type="password" placeholder="Confirm Password" autocomplete="new-password" />
+          <div class="inputRow">
+            <input class="input sharp" id="regPass2" type="password" placeholder="Confirm Password" autocomplete="new-password" />
+            <button class="btn sharp small togglePass" type="button" data-target="regPass2">SHOW</button>
+          </div>
 
           <label class="checkRow">
             <input type="checkbox" id="regTos" />

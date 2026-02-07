@@ -16,6 +16,17 @@ body{
   user-select:none; -webkit-user-select:none;
   overscroll-behavior:none;
 }
+.visuallyHidden{
+  position:absolute !important;
+  height:1px;
+  width:1px;
+  overflow:hidden;
+  clip:rect(1px,1px,1px,1px);
+  white-space:nowrap;
+  border:0;
+  padding:0;
+  margin:-1px;
+}
 img,svg{ -webkit-user-drag:none; user-drag:none; }
 button,canvas{ touch-action:none; }
 :focus{ outline:none; }
@@ -112,6 +123,18 @@ button,canvas{ touch-action:none; }
   background: rgba(0,0,0,0.55);
   color: var(--fg);
   font-family: Rajdhani, system-ui;
+}
+.inputRow{
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.inputRow .input{
+  flex:1;
+}
+.togglePass{
+  min-width:72px;
+  margin: 8px 0;
 }
 .checkRow{
   display:flex; align-items:center; gap:10px;

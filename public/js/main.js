@@ -750,6 +750,20 @@ async function resetPasswordFlow(){
   }
 }
 
+function wirePasswordToggles(){
+  document.querySelectorAll(".togglePass").forEach((btn)=>{
+    btn.addEventListener("click", ()=>{
+      const targetId = btn.dataset.target;
+      const input = targetId ? document.getElementById(targetId) : null;
+      if(!input) return;
+      const makeVisible = input.type === "password";
+      input.type = makeVisible ? "text" : "password";
+      btn.textContent = makeVisible ? "HIDE" : "SHOW";
+      btn.classList.toggle("primary", makeVisible);
+    });
+  });
+}
+
 /* UI: menu auth */
 function setMenuAuthUI(user){
   const last = getLastUser();
@@ -2621,6 +2635,7 @@ if(auth){
 function boot(){
   hideError();
   showScreen(el.screens.loading);
+  wirePasswordToggles();
   let p=0;
   const step=()=>{
     p=Math.min(100, p + 7 + Math.random()*10);
