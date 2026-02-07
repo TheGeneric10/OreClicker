@@ -1,5 +1,14 @@
 export const CHANGELOG = [
     {
+      ver: "0.9",
+      date: "February 2026",
+      items: [
+        "New enemy rewards: money by enemy type, rare boss spawns, and siphon money boost on boss defeat.",
+        "Starter tools updated to include Basic Axe; stick crafting now uses 4 wood.",
+        "RTDB data isolated under OreClicker/data with refreshed world resource spread."
+      ]
+    },
+    {
       ver: "0.8",
       date: "February 2026",
       items: [
@@ -67,6 +76,7 @@ export const CHANGELOG = [
     }
   ];
   
+  export function renderChangelog(rootEl, activeVer = "0.9") {
   export function renderChangelog(rootEl, activeVer = "0.8") {
     rootEl.innerHTML = `
       <div class="card sharp">

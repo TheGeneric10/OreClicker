@@ -18,6 +18,10 @@ const clampN=(n,f=0)=>Number.isFinite(Number(n))?Number(n):f;
 const fmtI=(n)=>Math.floor(clampN(n,0)).toLocaleString();
 const now=()=>Date.now();
 
+const RTDB_URL = "https://thegeneric-685b0-default-rtdb.firebaseio.com";
+const RTDB_ROOT = "OreClicker";
+const RTDB_DATA = `${RTDB_ROOT}/data`;
+const RTDB_REF = `${RTDB_URL}/${RTDB_ROOT}`;
 const RTDB_URL = "https://thegeneric-685b0-default-rtdb.firebaseio.com/";
 const RTDB_ROOT = "OreClicker";
 const RTDB_REF = `${RTDB_URL}${RTDB_ROOT}`;
@@ -171,6 +175,10 @@ const hideError=()=>{
   el.error.more.textContent = "";
 };
 const showError=(code, title, desc, moreText="")=>{
+  if(Number(code) === 500){
+    console.warn("Suppressing 500 error banner:", title, desc, moreText);
+    return;
+  }
   hideError();
   el.error.code.textContent = String(code||"503");
   el.error.title.textContent = title || "SERVICE ERROR";
@@ -295,6 +303,7 @@ if(db){
 }
 
 /* Save model */
+const SAVE_VERSION="0.9";
 const SAVE_VERSION="0.8";
 const LAST_USER_KEY="oreclicker_last_user";
 
@@ -464,6 +473,10 @@ function sanitizeLoadedState(raw){
 /* RTDB paths */
 const path = {
   root: ()=> RTDB_ROOT,
+  meta: ()=> `${RTDB_ROOT}/meta`,
+  dataRoot: ()=> RTDB_DATA,
+  userSave: (uid)=> `${RTDB_DATA}/users/${uid}/save`,
+  userProfile: (uid)=> `${RTDB_DATA}/users/${uid}/profile`,
   userSave: (uid)=> `${RTDB_ROOT}/users/${uid}/save`,
   userProfile: (uid)=> `${RTDB_ROOT}/users/${uid}/profile`,
   usernames: (u)=> `${RTDB_ROOT}/usernames/${String(u||"").toLowerCase()}`
@@ -485,6 +498,13 @@ async function dbUpdate(p, v){ await update(ref(db, p), v); }
 async function ensureOreClickerRoot(){
   if(!db) return;
   try{
+    const meta = await dbGet(path.meta());
+    if(!meta){
+      await dbSet(path.meta(), { createdAt: now(), version: SAVE_VERSION });
+    }
+    const data = await dbGet(path.dataRoot());
+    if(!data){
+      await dbSet(path.dataRoot(), { createdAt: now() });
     const root = await dbGet(path.root());
     if(!root){
       await dbSet(path.root(), { meta:{ createdAt: now(), version: SAVE_VERSION } });
@@ -886,11 +906,11 @@ const minimapCssRect=()=>({ x:12, y:12, size: minimapExpanded ? 240 : 120 });
 
 /* Ores */
 const ORE_TYPES = [
-  { id:"ore_basic",   hp:2,  minRespawn:3,  maxRespawn:8,  cap: 18, radius: 420 },
-  { id:"ore_coal",    hp:3,  minRespawn:4,  maxRespawn:10, cap: 12, radius: 520 },
-  { id:"ore_iron",    hp:4,  minRespawn:6,  maxRespawn:12, cap: 9,  radius: 620 },
-  { id:"ore_gold",    hp:6,  minRespawn:10, maxRespawn:18, cap: 6,  radius: 720 },
-  { id:"ore_diamond", hp:8,  minRespawn:14, maxRespawn:22, cap: 4,  radius: 820 },
+  { id:"ore_basic",   hp:2,  minRespawn:3,  maxRespawn:8,  cap: 18, radius: 900 },
+  { id:"ore_coal",    hp:3,  minRespawn:4,  maxRespawn:10, cap: 12, radius: 1100 },
+  { id:"ore_iron",    hp:4,  minRespawn:6,  maxRespawn:12, cap: 9,  radius: 1300 },
+  { id:"ore_gold",    hp:6,  minRespawn:10, maxRespawn:18, cap: 6,  radius: 1500 },
+  { id:"ore_diamond", hp:8,  minRespawn:14, maxRespawn:22, cap: 4,  radius: 1700 },
 ];
 const ORE_COL = {
   ore_basic:"rgba(150,150,150,0.85)",
@@ -900,6 +920,7 @@ const ORE_COL = {
   ore_diamond:"rgba(255,210,70,0.9)"
 };
 const TREE_TYPES = [
+  { id:"wood", hp:3, minRespawn:6, maxRespawn:14, cap: 26, radius: 1500 }
   { id:"wood", hp:3, minRespawn:6, maxRespawn:14, cap: 26, radius: 860 }
 ];
 
@@ -918,7 +939,7 @@ function spawnOreOne(type){
     const rad = Math.random()*type.radius;
     const x = clamp(cx + Math.cos(ang)*rad, WORLD.wild.x+30, WORLD.wild.x+WORLD.wild.w-30);
     const y = clamp(cy + Math.sin(ang)*rad, WORLD.wild.y+30, WORLD.wild.y+WORLD.wild.h-30);
-    const ok = ores.every(o => o.deadUntil>0 || Math.hypot(o.x-x,o.y-y) > 34);
+    const ok = ores.every(o => o.deadUntil>0 || Math.hypot(o.x-x,o.y-y) > 60);
     if(ok){
       ores.push({ id:type.id, x, y, r:14, hp:type.hp, maxHp:type.hp, deadUntil:0 });
       return true;
@@ -960,6 +981,7 @@ function spawnTreeOne(type){
     const rad = Math.random()*type.radius;
     const x = clamp(cx + Math.cos(ang)*rad, WORLD.wild.x+30, WORLD.wild.x+WORLD.wild.w-30);
     const y = clamp(cy + Math.sin(ang)*rad, WORLD.wild.y+30, WORLD.wild.y+WORLD.wild.h-30);
+    const ok = trees.every(o => o.deadUntil>0 || Math.hypot(o.x-x,o.y-y) > 70);
     const ok = trees.every(o => o.deadUntil>0 || Math.hypot(o.x-x,o.y-y) > 42);
     if(ok){
       trees.push({ id:type.id, x, y, r:16, hp:type.hp, maxHp:type.hp, deadUntil:0 });
@@ -990,11 +1012,36 @@ function updateTrees(){
 }
 
 /* Enemies */
-let enemies = []; // {x,y,r,hp,spd,hitCd}
+const ENEMY_TYPES = [
+  { id:"scavenger", name:"Scavenger", hp:18, r:11, spd:[60,90], money:[6,12], color:"rgba(255,140,120,0.8)" },
+  { id:"prowler", name:"Prowler", hp:26, r:13, spd:[55,80], money:[10,18], color:"rgba(255,120,90,0.82)" },
+  { id:"brute", name:"Brute", hp:38, r:15, spd:[45,70], money:[16,26], color:"rgba(255,90,70,0.84)" }
+];
+const BOSS_TYPE = { id:"boss", name:"Ancient Guardian", hp:120, r:22, spd:[35,50], money:[60,120], color:"rgba(255,60,60,0.9)" };
+let enemies = []; // {x,y,r,hp,maxHp,spd,hitCd,type}
+let siphonUntil = 0;
+let siphonMult = 1;
+
+function getEnemyDef(enemy){
+  if(enemy?.type === "boss") return BOSS_TYPE;
+  return ENEMY_TYPES.find(t=>t.id===enemy?.type) || ENEMY_TYPES[0];
+}
 function spawnEnemy(){
   const x = rand(WORLD.wild.x+60, WORLD.wild.x+WORLD.wild.w-60);
   const y = rand(WORLD.wild.y+60, WORLD.wild.y+WORLD.wild.h-60);
-  enemies.push({ x,y,r:12,hp:24,spd:50+Math.random()*30,hitCd:0 });
+  const bossActive = enemies.some(e=>e.type==="boss");
+  const isBoss = !bossActive && Math.random() < 0.03;
+  const def = isBoss ? BOSS_TYPE : ENEMY_TYPES[Math.floor(Math.random()*ENEMY_TYPES.length)];
+  enemies.push({
+    x,
+    y,
+    r: def.r,
+    hp: def.hp,
+    maxHp: def.hp,
+    spd: rand(def.spd[0], def.spd[1]),
+    hitCd: 0,
+    type: def.id
+  });
 }
 function ensureEnemies(){
   const cap = 8 + Math.min(10, S.rebirths.count*2);
@@ -1195,6 +1242,40 @@ function mineOre(){
       addItem(S.inventory, makeItem("wood", yieldAmt));
       toast(`+${yieldAmt} Wood`);
       scheduleTreeRespawn(t);
+
+  if(eq.def.type==="tool"){
+    const o = nearestOre();
+    if(!o){ setSideStatus("No ore nearby"); return; }
+    const power = eq.def.mine || 1;
+    damageEquipment(eq);
+
+    o.hp -= power;
+    setSideStatus(`Mining ${ITEMS[o.id].name}…`);
+    if(o.hp<=0){
+      const yieldAmt = o.id==="ore_basic"?2 : o.id==="ore_coal"?2 : o.id==="ore_iron"?2 : o.id==="ore_gold"?1 : 1;
+      S.resources[o.id] = (S.resources[o.id]||0) + yieldAmt;
+      addItem(S.inventory, makeItem(o.id, yieldAmt));
+      toast(`+${yieldAmt} ${ITEMS[o.id].name}`);
+      scheduleOreRespawn(o);
+    }
+    invUI.render();
+    renderResources();
+    return;
+  }
+
+  if(eq.def.type==="axe"){
+    const t = nearestTree();
+    if(!t){ setSideStatus("No trees nearby"); return; }
+    const power = eq.def.chop || 1;
+    damageEquipment(eq);
+    t.hp -= power;
+    setSideStatus("Chopping wood…");
+    if(t.hp<=0){
+      const yieldAmt = 2;
+      S.resources.wood = (S.resources.wood||0) + yieldAmt;
+      addItem(S.inventory, makeItem("wood", yieldAmt));
+      toast(`+${yieldAmt} Wood`);
+      scheduleTreeRespawn(t);
     }
     invUI.render();
     renderResources();
@@ -1223,11 +1304,23 @@ function attack(){
   best.hp -= atk;
   setSideStatus(`Hit enemy (-${atk})`);
   if(best.hp<=0){
+    const def = getEnemyDef(best);
     const dropRoll = Math.random();
     const drop = dropRoll < 0.15 ? "wood" : (dropRoll < 0.65 ? "ore_basic" : (dropRoll < 0.82 ? "ore_coal" : "ore_iron"));
     if(Object.prototype.hasOwnProperty.call(S.resources, drop)) S.resources[drop] += 1;
     addItem(S.inventory, makeItem(drop,1));
-    toast("Enemy defeated!");
+    const baseMoney = Math.round(rand(def.money[0], def.money[1]));
+    const nowMs = now();
+    const moneyMult = nowMs < siphonUntil ? siphonMult : 1;
+    const reward = Math.max(1, Math.round(baseMoney * moneyMult));
+    S.resources.money = Math.floor(clampN(S.resources.money, 0) + reward);
+    if(def.id === "boss"){
+      siphonMult = Math.round(rand(2, 5) * 10) / 10;
+      siphonUntil = now() + 5000;
+      toast(`Boss defeated! +$${fmtI(reward)} • Siphon x${siphonMult} for 5s.`);
+    } else {
+      toast(`Enemy defeated! +$${fmtI(reward)}`);
+    }
     enemies = enemies.filter(x=>x!==best);
   }
   invUI.render();
@@ -1449,11 +1542,12 @@ function draw(){
   // enemies
   for(const m of enemies){
     const p = worldToScreen(m.x, m.y);
-    ctx.fillStyle="rgba(255,80,80,0.75)";
+    const def = getEnemyDef(m);
+    ctx.fillStyle = def.color || "rgba(255,80,80,0.75)";
     ctx.beginPath(); ctx.arc(p.x, p.y, m.r, 0, Math.PI*2); ctx.fill();
     ctx.strokeStyle="rgba(255,255,255,0.12)"; ctx.stroke();
     ctx.fillStyle="rgba(0,0,0,0.55)"; ctx.fillRect(p.x-18, p.y+18, 36, 5);
-    ctx.fillStyle="rgba(255,255,255,0.75)"; ctx.fillRect(p.x-18, p.y+18, 36*(m.hp/24), 5);
+    ctx.fillStyle="rgba(255,255,255,0.75)"; ctx.fillRect(p.x-18, p.y+18, 36*(m.hp/(m.maxHp||24)), 5);
   }
 
   // minimap
@@ -1997,6 +2091,7 @@ function openCraftingArea(){
         <div class="cardTitle">Stick Prep</div>
         <div class="smallmuted">Convert wood into sticks for crafting.</div>
         <div class="row" style="margin-top:8px;">
+          <button class="btn sharp small" id="craftStick">CRAFT 1x STICK (4 WOOD)</button>
           <button class="btn sharp small" id="craftStick">CRAFT 2x STICK (1 WOOD)</button>
         </div>
       </div>
@@ -2043,6 +2138,11 @@ function openCraftingArea(){
   renderRecipes();
   body.addEventListener("click", (e)=>{
     if(e.target.id==="craftStick"){
+      if(countItem("wood") < 4) return toast("Need 4 wood to craft a stick");
+      consumeItem("wood", 4);
+      addItem(S.inventory, makeItem("stick", 1));
+      invUI.render();
+      status.textContent = "Crafted 1 stick!";
       if(countItem("wood") < 1) return toast("Need wood to craft sticks");
       consumeItem("wood", 1);
       addItem(S.inventory, makeItem("stick", 2));
@@ -2325,6 +2425,7 @@ function startGame(){
   if(!S.inventory.hotbar.some(Boolean) && !S.inventory.inv.some(Boolean)){
     addItem(S.inventory, makeItem("pick_basic",1));
     addItem(S.inventory, makeItem("sword_basic",1));
+    addItem(S.inventory, makeItem("axe_basic",1));
     invUI.render();
   }
 
