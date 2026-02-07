@@ -1,14 +1,249 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Hello World</title>
-  <link href='/style.css' rel='stylesheet'>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>OreClicker</title>
+  <link rel="stylesheet" href="public/css/style.css" />
 </head>
 <body>
-  <h1>Hello, world!</h1>
-  <button onclick="console.log('hello');">Press me</button>
-  <script defer type="text/javascript" src="/main.js"></script>
+  <!-- Error banner -->
+  <div id="errorBanner" class="errorBanner sharp" hidden>
+    <div class="errorCode" id="errorCode">503</div>
+    <div class="errorText">
+      <div class="errorTitle" id="errorTitle">SERVICE UNAVAILABLE</div>
+      <div class="errorDesc" id="errorDesc">Temporary connection problem.</div>
+      <div class="errorDesc tiny" id="errorMore" hidden></div>
+    </div>
+    <button class="btn small sharp" id="errorClose" type="button">CLOSE</button>
+  </div>
+
+  <main class="root">
+    <!-- LOADING -->
+    <section id="screenLoading" class="screen active">
+      <div class="panel sharp">
+        <div class="panel-title">Initializing</div>
+        <div class="loading-title">ORECLICKER</div>
+        <div class="loading-sub">Booting systems…</div>
+        <div class="progress"><div class="bar" id="loadingBar"></div></div>
+      </div>
+    </section>
+
+    <!-- MAIN MENU -->
+    <section id="screenMenu" class="screen">
+      <div class="panel sharp menuPanel">
+        <div class="menuHero sharp">
+          <div class="heroTitle">ORECLICKER</div>
+          <div class="heroSub">Tycoon + RPG. Mine. Build. Sell. Upgrade.</div>
+        </div>
+
+        <div class="menuGrid">
+          <button class="btn sharp primary" id="btnPlayGuest" type="button">PLAY AS GUEST</button>
+
+          <div class="menuAuthRow" id="menuAuthRow">
+            <button class="btn sharp" id="btnGoLogin" type="button">LOGIN</button>
+            <button class="btn sharp" id="btnGoRegister" type="button">REGISTER</button>
+          </div>
+
+          <div class="menuConfirmUser sharp" id="menuConfirmUser" hidden>
+            <div class="cardTitle">Continue as <span id="lastUserLabel">user</span>?</div>
+            <div class="smallmuted">Enter password to continue.</div>
+
+            <form id="quickLoginForm" autocomplete="on">
+              <input class="input sharp" id="quickPass" type="password" placeholder="Password" autocomplete="current-password" />
+              <div class="row">
+                <button class="btn sharp primary" id="btnQuickLogin" type="submit">CONTINUE</button>
+                <button class="btn sharp" id="btnNotMe" type="button">NOT ME</button>
+              </div>
+            </form>
+          </div>
+
+          <div class="row">
+            <button class="btn sharp" id="btnMenuWhatsNew" type="button">WHAT'S NEW</button>
+            <button class="btn sharp" id="btnMenuHow" type="button">HOW TO PLAY</button>
+            <button class="btn sharp" id="btnMenuSettings" type="button">SETTINGS</button>
+          </div>
+
+          <div class="footerHint">Tip: Guest progress is temporary. Login to save.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- WHAT'S NEW SCREEN -->
+    <section id="screenWhatsNew" class="screen">
+      <div class="panel sharp authPanel">
+        <div class="panel-title">What's New</div>
+        <div id="whatsNewRoot"></div>
+        <button class="btn sharp" id="btnWhatsNewBack" type="button">BACK</button>
+      </div>
+    </section>
+
+    <!-- LOGIN -->
+    <section id="screenLogin" class="screen">
+      <div class="panel sharp authPanel">
+        <div class="panel-title">Login</div>
+
+        <form id="loginForm" autocomplete="on">
+          <input class="input sharp" id="loginEmail" type="text" placeholder="Username or Email" autocomplete="username" />
+          <input class="input sharp" id="loginPass" type="password" placeholder="Password" autocomplete="current-password" />
+
+          <label class="checkRow">
+            <input type="checkbox" id="loginRemember" />
+            <span>Remember Me</span>
+          </label>
+
+          <div class="authLinks">
+            <button class="linkBtn" id="btnForgot" type="button">Forgot Password?</button>
+          </div>
+
+          <div class="row">
+            <button class="btn sharp primary" id="btnLogin" type="submit">LOGIN</button>
+            <button class="btn sharp" id="btnLoginToRegister" type="button">REGISTER</button>
+          </div>
+        </form>
+
+        <button class="btn sharp" id="btnGoogleLogin" type="button">LOGIN WITH GOOGLE</button>
+        <button class="btn sharp" id="btnLoginBack" type="button">BACK</button>
+      </div>
+    </section>
+
+    <!-- REGISTER -->
+    <section id="screenRegister" class="screen">
+      <div class="panel sharp authPanel">
+        <div class="panel-title">Register</div>
+
+        <form id="registerForm" autocomplete="on">
+          <input class="input sharp" id="regEmail" type="email" placeholder="Email" autocomplete="email" />
+
+          <div class="meterWrap">
+            <input class="input sharp" id="regUser" type="text" placeholder="Username" autocomplete="username" />
+            <div class="meterRow">
+              <div class="meterBar"><i id="userMeter"></i></div>
+              <div class="meterText" id="userMeterText">Username requirements</div>
+            </div>
+            <div class="smallmuted" id="userTakenText"></div>
+          </div>
+
+          <div class="meterWrap">
+            <input class="input sharp" id="regPass" type="password" placeholder="Password" autocomplete="new-password" aria-autocomplete="list" />
+            <div class="meterRow">
+              <div class="meterBar"><i id="passMeter"></i></div>
+              <div class="meterText" id="passMeterText">Password requirements</div>
+            </div>
+          </div>
+
+          <input class="input sharp" id="regPass2" type="password" placeholder="Confirm Password" autocomplete="new-password" />
+
+          <label class="checkRow">
+            <input type="checkbox" id="regTos" />
+            <span>I agree to Terms and Services</span>
+          </label>
+
+          <div class="row">
+            <button class="btn sharp" id="btnTerms" type="button">TERMS</button>
+            <button class="btn sharp" id="btnPrivacy" type="button">PRIVACY</button>
+          </div>
+
+          <label class="checkRow">
+            <input type="checkbox" id="regRobot" />
+            <span>I am NOT a robot</span>
+          </label>
+
+          <div class="row">
+            <button class="btn sharp primary" id="btnVerifyRegister" type="submit">VERIFY & REGISTER</button>
+            <button class="btn sharp" id="btnRegisterToLogin" type="button">LOGIN</button>
+          </div>
+        </form>
+
+        <button class="btn sharp" id="btnGoogleRegister" type="button">REGISTER WITH GOOGLE</button>
+        <button class="btn sharp" id="btnRegisterBack" type="button">BACK</button>
+      </div>
+    </section>
+
+    <!-- GAME -->
+    <section id="screenGame" class="screen gameScreen">
+      <div class="gameWrap">
+        <canvas id="gameCanvas"></canvas>
+
+        <!-- HUD bottom-left -->
+        <div class="hud sharp" id="hud">
+          <div class="hudBlock">
+            <div class="hudLabel">HP <b id="hudHpText">250/250</b></div>
+            <div class="hudBar hp sharp"><i id="hudHpBar"></i></div>
+          </div>
+          <div class="hudBlock" style="margin-top:10px;">
+            <div class="hudLabel">SHIELD <b id="hudShieldText">50/50</b></div>
+            <div class="hudBar shield sharp"><i id="hudShieldBar"></i></div>
+          </div>
+        </div>
+
+        <!-- Profile chip bottom-center (only when logged in) -->
+        <button class="profileChip sharp" id="profileChip" type="button" hidden>
+          <span class="pcLeft">PROFILE</span>
+          <span class="pcSep">|</span>
+          <span class="pcName" id="profileChipName">username</span>
+        </button>
+
+        <!-- Sidebar -->
+        <aside class="sidebar sharp" id="sidebar">
+          <div class="sideTop">
+            <button class="btn sharp small" id="btnPause" type="button">PAUSE MENU</button>
+            <button class="btn sharp small" id="btnWhatsNew" type="button">WHAT'S NEW?</button>
+            <button class="btn sharp small" id="btnGameSettings" type="button">GAME SETTINGS</button>
+          </div>
+
+          <div class="sideSectionTitle">RESOURCES</div>
+          <div class="sideRes">
+            <div class="sideResRow"><span>Money</span><b data-bind="money">0</b></div>
+            <div class="sideResRow"><span>Basic</span><b data-bind="ore_basic">0</b></div>
+            <div class="sideResRow"><span>Coal</span><b data-bind="ore_coal">0</b></div>
+            <div class="sideResRow"><span>Iron</span><b data-bind="ore_iron">0</b></div>
+            <div class="sideResRow"><span>Gold</span><b data-bind="ore_gold">0</b></div>
+            <div class="sideResRow"><span>Diamond</span><b data-bind="ore_diamond">0</b></div>
+          </div>
+
+          <div class="sideSectionTitle">STATUS</div>
+          <div class="sideStatus" id="sideStatus">Ready</div>
+          <div class="sideHint" id="sideHint">Move: WASD • Mine: E • Attack: Space • Use: Q</div>
+
+          <div class="sideSectionTitle">HOTBAR</div>
+          <div class="slots hotbar" id="hotbarSlots"></div>
+
+          <div class="sideSectionTitle">INVENTORY</div>
+          <div class="slots inv" id="invSlots"></div>
+
+          <div class="sideFooter">
+            <div class="smallmuted" id="saveModeText">Guest Mode: no saving</div>
+          </div>
+        </aside>
+      </div>
+    </section>
+  </main>
+
+  <!-- Modal -->
+  <div class="modalBackdrop" id="modalBackdrop" aria-hidden="true" inert>
+    <div class="modal sharp" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modalHead">
+        <div class="modalTitle" id="modalTitle">Menu</div>
+        <button class="btn sharp small" id="modalClose" type="button">CLOSE</button>
+      </div>
+      <div class="modalBody" id="modalBody"></div>
+      <div class="modalFoot" id="modalFoot"></div>
+    </div>
+
+    <!-- mini popup layer (appears below main modal) -->
+    <div class="miniPopup sharp" id="miniPopup" hidden>
+      <div class="miniTitle" id="miniTitle">Select Amount</div>
+      <div class="miniBody" id="miniBody"></div>
+      <div class="miniFoot" id="miniFoot"></div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast" aria-live="polite" aria-atomic="true">
+    <div class="toastInner sharp" id="toastInner"></div>
+  </div>
+
+  <script type="module" src="public/js/main.js"></script>
 </body>
 </html>
