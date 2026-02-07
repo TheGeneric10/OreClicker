@@ -8,23 +8,34 @@ export const RARITY_CLASS = {
     Exotic: "r-exotic"
   };
   
-  export const ITEMS = {
+export const ITEMS = {
     ore_basic:   { id:"ore_basic",   name:"Basic Ore",   rarity:"Common",   type:"ore",        icon:"🪨", stack:true,  value:1 },
     ore_coal:    { id:"ore_coal",    name:"Coal Ore",    rarity:"Uncommon", type:"ore",        icon:"⚫", stack:true,  value:3 },
     ore_iron:    { id:"ore_iron",    name:"Iron Ore",    rarity:"Rare",     type:"ore",        icon:"⛓️", stack:true,  value:6 },
     ore_gold:    { id:"ore_gold",    name:"Gold Ore",    rarity:"Epic",     type:"ore",        icon:"🟡", stack:true,  value:12 },
     ore_diamond: { id:"ore_diamond", name:"Diamond Ore", rarity:"Epic",     type:"ore",        icon:"💎", stack:true,  value:25 },
-  
+
+    wood:        { id:"wood",        name:"Wood",        rarity:"Common",   type:"material",   icon:"🪵", stack:true,  value:2 },
+    stick:       { id:"stick",       name:"Stick",       rarity:"Common",   type:"material",   icon:"🪄", stack:true,  value:1 },
+
     sword_basic:   { id:"sword_basic",   name:"Basic Sword",   rarity:"Common",   type:"melee", icon:"🗡️", stack:false, maxDur:60,  atk:2 },
     sword_coal:    { id:"sword_coal",    name:"Coal Sword",    rarity:"Common",   type:"melee", icon:"🗡️", stack:false, maxDur:80,  atk:3 },
     sword_iron:    { id:"sword_iron",    name:"Iron Sword",    rarity:"Uncommon", type:"melee", icon:"🗡️", stack:false, maxDur:110, atk:4 },
     sword_gold:    { id:"sword_gold",    name:"Gold Sword",    rarity:"Rare",     type:"melee", icon:"🗡️", stack:false, maxDur:150, atk:6 },
     sword_diamond: { id:"sword_diamond", name:"Diamond Sword", rarity:"Epic",     type:"melee", icon:"🗡️", stack:false, maxDur:220, atk:9 },
-  
+
     pick_basic:    { id:"pick_basic",    name:"Basic Pickaxe", rarity:"Common",   type:"tool",  icon:"⛏️", stack:false, maxDur:90,  mine:1 },
+    pick_coal:     { id:"pick_coal",     name:"Coal Pickaxe",  rarity:"Common",   type:"tool",  icon:"⛏️", stack:false, maxDur:120, mine:2 },
     pick_iron:     { id:"pick_iron",     name:"Iron Pickaxe",  rarity:"Uncommon", type:"tool",  icon:"⛏️", stack:false, maxDur:160, mine:2 },
+    pick_gold:     { id:"pick_gold",     name:"Gold Pickaxe",  rarity:"Rare",     type:"tool",  icon:"⛏️", stack:false, maxDur:210, mine:3 },
     pick_diamond:  { id:"pick_diamond",  name:"Diamond Pickaxe",rarity:"Epic",    type:"tool",  icon:"⛏️", stack:false, maxDur:260, mine:3 },
-  
+
+    axe_basic:     { id:"axe_basic",     name:"Basic Axe",     rarity:"Common",   type:"axe",   icon:"🪓", stack:false, maxDur:80,  atk:2, chop:2 },
+    axe_coal:      { id:"axe_coal",      name:"Coal Axe",      rarity:"Common",   type:"axe",   icon:"🪓", stack:false, maxDur:110, atk:3, chop:3 },
+    axe_iron:      { id:"axe_iron",      name:"Iron Axe",      rarity:"Uncommon", type:"axe",   icon:"🪓", stack:false, maxDur:150, atk:4, chop:4 },
+    axe_gold:      { id:"axe_gold",      name:"Gold Axe",      rarity:"Rare",     type:"axe",   icon:"🪓", stack:false, maxDur:200, atk:5, chop:5 },
+    axe_diamond:   { id:"axe_diamond",   name:"Diamond Axe",   rarity:"Epic",     type:"axe",   icon:"🪓", stack:false, maxDur:260, atk:7, chop:6 },
+
     cons_medkit:   { id:"cons_medkit",   name:"Medkit",        rarity:"Rare",     type:"consumable", icon:"🧰", stack:true, healHp:75 },
     cons_shield:   { id:"cons_shield",   name:"Shield Potion", rarity:"Uncommon", type:"consumable", icon:"🧪", stack:true, addShield:25 },
   };
@@ -122,7 +133,7 @@ export const RARITY_CLASS = {
             <div class="icon">${it?.icon || "❓"}</div>
             ${it?.stack ? `<div class="qty">x${fmtI(s.qty)}</div>` : ``}
           `;
-          if(it && !it.stack && (it.type==="melee"||it.type==="tool")){
+          if(it && !it.stack && (it.type==="melee"||it.type==="tool"||it.type==="axe")){
             const max = it.maxDur ?? 100;
             const pct = Math.max(0, Math.min(1, (s.dur??max)/max));
             const dura = document.createElement("div");
