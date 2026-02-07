@@ -50,7 +50,11 @@
             <div class="smallmuted">Enter password to continue.</div>
 
             <form id="quickLoginForm" autocomplete="on">
-              <input class="input sharp" id="quickPass" type="password" placeholder="Password" autocomplete="current-password" />
+              <input class="input sharp visuallyHidden" type="text" name="username" autocomplete="username" />
+              <div class="inputRow">
+                <input class="input sharp" id="quickPass" type="password" placeholder="Password" autocomplete="current-password" />
+                <button class="btn sharp small togglePass" type="button" data-target="quickPass">SHOW</button>
+              </div>
               <div class="row">
                 <button class="btn sharp primary" id="btnQuickLogin" type="submit">CONTINUE</button>
                 <button class="btn sharp" id="btnNotMe" type="button">NOT ME</button>
@@ -85,7 +89,10 @@
 
         <form id="loginForm" autocomplete="on">
           <input class="input sharp" id="loginEmail" type="text" placeholder="Username or Email" autocomplete="username" />
-          <input class="input sharp" id="loginPass" type="password" placeholder="Password" autocomplete="current-password" />
+          <div class="inputRow">
+            <input class="input sharp" id="loginPass" type="password" placeholder="Password" autocomplete="current-password" />
+            <button class="btn sharp small togglePass" type="button" data-target="loginPass">SHOW</button>
+          </div>
 
           <label class="checkRow">
             <input type="checkbox" id="loginRemember" />
@@ -125,14 +132,20 @@
           </div>
 
           <div class="meterWrap">
-            <input class="input sharp" id="regPass" type="password" placeholder="Password" autocomplete="new-password" aria-autocomplete="list" />
+            <div class="inputRow">
+              <input class="input sharp" id="regPass" type="password" placeholder="Password" autocomplete="new-password" aria-autocomplete="list" />
+              <button class="btn sharp small togglePass" type="button" data-target="regPass">SHOW</button>
+            </div>
             <div class="meterRow">
               <div class="meterBar"><i id="passMeter"></i></div>
               <div class="meterText" id="passMeterText">Password requirements</div>
             </div>
           </div>
 
-          <input class="input sharp" id="regPass2" type="password" placeholder="Confirm Password" autocomplete="new-password" />
+          <div class="inputRow">
+            <input class="input sharp" id="regPass2" type="password" placeholder="Confirm Password" autocomplete="new-password" />
+            <button class="btn sharp small togglePass" type="button" data-target="regPass2">SHOW</button>
+          </div>
 
           <label class="checkRow">
             <input type="checkbox" id="regTos" />
@@ -164,6 +177,7 @@
     <section id="screenGame" class="screen gameScreen">
       <div class="gameWrap">
         <canvas id="gameCanvas"></canvas>
+        <div class="fpsCounter sharp" id="fpsCounter" hidden>FPS: 0</div>
 
         <!-- HUD bottom-left -->
         <div class="hud sharp" id="hud">
@@ -200,6 +214,7 @@
             <div class="sideResRow"><span>Iron</span><b data-bind="ore_iron">0</b></div>
             <div class="sideResRow"><span>Gold</span><b data-bind="ore_gold">0</b></div>
             <div class="sideResRow"><span>Diamond</span><b data-bind="ore_diamond">0</b></div>
+            <div class="sideResRow"><span>Wood</span><b data-bind="wood">0</b></div>
           </div>
 
           <div class="sideSectionTitle">STATUS</div>
@@ -216,6 +231,17 @@
             <div class="smallmuted" id="saveModeText">Guest Mode: no saving</div>
           </div>
         </aside>
+
+        <div class="touchControls" id="touchControls" hidden>
+          <div class="touchPad" id="touchPad">
+            <div class="touchKnob" id="touchKnob"></div>
+          </div>
+          <div class="touchButtons">
+            <button class="btn sharp small primary" id="touchMine" type="button">MINE</button>
+            <button class="btn sharp small" id="touchAttack" type="button">ATTACK</button>
+            <button class="btn sharp small" id="touchUse" type="button">USE</button>
+          </div>
+        </div>
       </div>
     </section>
   </main>
